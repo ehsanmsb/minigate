@@ -1,0 +1,6 @@
+buckets:
+  - name: avatars
+    endpoint: "https://s3.example.com"
+    access_key: "xxx"
+    secret_key: "yyy"
+    path: "users/"
