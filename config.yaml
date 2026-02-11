@@ -1,6 +1,7 @@
 buckets:
   - name: avatars
-    endpoint: "https://s3.example.com"
-    access_key: "xxx"
-    secret_key: "yyy"
-    path: "users/"
+    bucket: avatars
+    endpoint: "https://s3.org"
+    access_key: "xxxx"
+    secret_key: "xxxx"
+    path: ""
