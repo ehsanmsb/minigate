@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"io"
+	"github.com/ehsanmsb/minigate/internal/ports"
 )
 
 type Storage struct {
 	clients map[string]*s3.Client
 }
 
-func (s *Storage) GetObject(ctx context.Context, bucket string, key string) (io.ReadCloser, error) {
+func (s *Storage) GetObject(ctx context.Context, bucket string, key string) (*ports.ObjectResult, error) {
 	client, ok := s.clients[bucket]
 	if !ok {
 		return nil, errors.New("bucket not found")
@@ -23,5 +23,12 @@ func (s *Storage) GetObject(ctx context.Context, bucket string, key string) (io.
 	if err != nil {
 		return nil, err
 	}
-	return out.Body, nil
+	return &ports.ObjectResult{
+		Body:          out.Body,
+		ContentType:   out.ContentType,
+		ContentLength: out.ContentLength,
+		ETag:          out.ETag,
+		LastModified:  out.LastModified,
+		CacheControl:  out.CacheControl,
+	}, nil
 }
