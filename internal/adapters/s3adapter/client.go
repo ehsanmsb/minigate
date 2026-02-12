@@ -3,6 +3,7 @@ package s3adapter
 import (
 	"context"
 	"errors"
+
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ehsanmsb/minigate/internal/ports"
 )

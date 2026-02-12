@@ -1,9 +1,10 @@
 package httpadapter
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"net/http"
 )
 
 func (gh *GateHandler) Router() http.Handler {
@@ -17,6 +18,6 @@ func (gh *GateHandler) Router() http.Handler {
 		w.Write([]byte("ok"))
 	})
 
-	r.Get("/{bucket}/*", gh.GetObject)
+	r.Get("/{bucket}/*", gh.GetObjectHandler)
 	return r
 }

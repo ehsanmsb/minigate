@@ -3,12 +3,13 @@ package httpadapter
 import (
 	"bufio"
 	"errors"
-	"github.com/ehsanmsb/minigate/internal/app"
-	"github.com/ehsanmsb/minigate/internal/domain"
-	"github.com/go-chi/chi/v5"
 	"io"
 	"net/http"
 	"strconv"
+
+	"github.com/ehsanmsb/minigate/internal/app"
+	"github.com/ehsanmsb/minigate/internal/domain"
+	"github.com/go-chi/chi/v5"
 )
 
 type GateHandler struct {
@@ -19,7 +20,7 @@ func NewGateHandler(gateway *app.Gateway) *GateHandler {
 	return &GateHandler{gateway: gateway}
 }
 
-func (gh *GateHandler) GetObject(w http.ResponseWriter, r *http.Request) {
+func (gh *GateHandler) GetObjectHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	bucket := chi.URLParam(r, "bucket")
 	object := chi.URLParam(r, "*")
@@ -28,7 +29,7 @@ func (gh *GateHandler) GetObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	obj, err := gh.gateway.GetObject(ctx, bucket, object)
+	obj, err := gh.gateway.GetObjectService(ctx, bucket, object)
 	if err != nil {
 		if errors.Is(err, domain.ErrBucketNotFound) {
 			http.Error(w, "bucket not found", http.StatusNotFound)

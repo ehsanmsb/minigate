@@ -5,8 +5,8 @@ import (
 	"os"
 )
 
-func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+func Load(configPath string) (*Config, error) {
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}

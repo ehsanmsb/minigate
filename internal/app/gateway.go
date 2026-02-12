@@ -20,7 +20,7 @@ func NewGateway(storage ports.ObjectStorage, buckets map[string]domain.Bucket) *
 	}
 }
 
-func (g *Gateway) GetObject(ctx context.Context, bucketName string, object string) (*ports.ObjectResult, error) {
+func (g *Gateway) GetObjectService(ctx context.Context, bucketName string, object string) (*ports.ObjectResult, error) {
 	bucket, ok := g.buckets[bucketName]
 	if !ok {
 		return nil, domain.ErrBucketNotFound
