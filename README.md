@@ -1,39 +1,34 @@
 # MiniGate
 
-MiniGate is a lightweight HTTP gateway that serves objects from S3-compatible storage using a clean hexagonal architecture. It maps incoming URL paths to configured buckets and prefixes, then streams the object directly to the client.
+MiniGate exposes selected private S3-compatible buckets through public, read-only URLs. Each configured name has its own storage endpoint and credentials. The only object operation is `GetObject`.
 
-## Features
-
-- Hexagonal wiring (ports/adapters) for easy testing and extension
-- S3-compatible backends
-- Path-based bucket routing with optional prefix mapping
-- Streaming responses with metadata headers (Content-Type, Length, ETag, etc.)
+```text
+GET https://files.example.com/avatars/photos/profile.png
+                              │       └─ object key
+                              └─ public name configured below
+```
 
 ## Configuration
-
-`config.yaml` example:
 
 ```yaml
 buckets:
   - name: avatars
-    bucket: avatars
-    endpoint: "https://s3.example.com"
-    access_key: "ACCESS_KEY"
-    secret_key: "SECRET_KEY"
-    path: ""
+    bucket: private-images
+    endpoint: https://s3.example.com
+    region: us-east-1
+    access_key: ACCESS_KEY
+    secret_key: SECRET_KEY
+    path: public
+  - name: documents
+    bucket: project-documents
+    endpoint: https://objects.other-provider.example
+    access_key: OTHER_ACCESS_KEY
+    secret_key: OTHER_SECRET_KEY
 ```
 
-### Mapping rules
+`name` is the first URL path segment; `bucket` is the actual storage bucket. If `bucket` is omitted, it defaults to `name`. `path` is an optional key prefix, so `/avatars/photos/profile.png` reads `public/photos/profile.png` in `private-images`. If `region` is omitted, it defaults to `us-east-1`. Bucket names in the configuration must be unique.
 
-- URL bucket name comes from `name`
-- Actual S3 bucket comes from `bucket` (falls back to `name` if empty)
-- `path` is an optional prefix added to the object key
-
-Example request:
-
-```bash
-GET /avatars/theme/images/illustration.png
-```
+Give each configured credential permission to read only its intended bucket's objects. Keep the configuration with your deployment secrets; do not commit real credentials. The public URL allows anyone to read every object reachable through that route.
 
 ## Run
 
@@ -41,12 +36,10 @@ GET /avatars/theme/images/illustration.png
 go run ./cmd/minigate -config config.yaml -addr :8080
 ```
 
-## Health
+The service accepts `GET /{name}/{object-key}` and `GET /health`. Other methods return 405. A missing object returns 404; storage failures return 502. `Range` requests are forwarded to storage for partial downloads. S3 content metadata is forwarded in the response.
 
-```bash
-GET /health
-```
+Responses include `Access-Control-Allow-Origin: *`, so public files can also be read by cross-origin JavaScript `fetch`. Requests that need a CORS preflight are outside this GET-only API.
 
-## Status
+## Replicas
 
-This project is under active development.
+MiniGate is stateless. Run multiple identical replicas behind a load balancer using the same configuration; no session affinity or shared volume is needed. `GET /health` can serve as a health probe. On SIGTERM, the server stops accepting new connections and waits up to 30 seconds for active responses to finish. Set your deployment's termination grace period longer than 30 seconds if it uses one.
