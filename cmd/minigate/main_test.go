@@ -15,7 +15,7 @@ func TestMetricsCountRequestsWithoutHealthProbes(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	app, metrics := instrument(handler)
+	app, metrics := instrument(handler, 2)
 	for _, path := range []string{"/health", "/file", "/missing"} {
 		app.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil))
 	}
@@ -25,6 +25,7 @@ func TestMetricsCountRequestsWithoutHealthProbes(t *testing.T) {
 		t.Fatalf("metrics status=%d", w.Code)
 	}
 	for _, sample := range []string{
+		`minigate_configured_buckets 2`,
 		`minigate_http_requests_total{code="200",method="get"} 1`,
 		`minigate_http_requests_total{code="404",method="get"} 1`,
 		`minigate_http_request_duration_seconds_count{code="200",method="get"} 1`,

@@ -42,7 +42,7 @@ Give each configured credential `GetObject` permission only for the intended pre
 go run ./cmd/minigate -config config.yaml -addr :8080
 ```
 
-Prometheus metrics are served separately at `127.0.0.1:9090/metrics` by default. Set `-metrics-addr` to change the listener. Metrics include request counts and durations by HTTP status and method, plus Go runtime and process metrics. Health probes are excluded from request counts. Object keys and bucket names are not metric labels.
+Prometheus metrics are served separately at `127.0.0.1:9090/metrics` by default. Set `-metrics-addr` to change the listener. Metrics include `minigate_configured_buckets`, request counts and durations by HTTP status and method, plus Go runtime and process metrics. Health probes are excluded from request counts. Object keys and bucket names are not metric labels. Prometheus itself supplies `up` for each scrape target; `GET /health` remains the Kubernetes health check.
 
 The service accepts `GET /{name}/{object-key}` and `GET /health`. Other methods return 405. A missing or inaccessible object returns 404; storage failures return 502. S3 can return `AccessDenied` for a missing object when credentials lack `ListBucket`, so MiniGate maps that error to 404. `Range` requests are forwarded to storage for partial downloads. S3 content metadata is forwarded in the response.
 

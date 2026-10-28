@@ -38,7 +38,7 @@ func main() {
 		slog.Error("load config", "error", err)
 		os.Exit(1)
 	}
-	appHandler, metricsHandler := instrument(gateway.New(cfg))
+	appHandler, metricsHandler := instrument(gateway.New(cfg), len(cfg.Buckets))
 	server := &http.Server{
 		Addr:              *addr,
 		Handler:           appHandler,
@@ -82,9 +82,14 @@ func main() {
 	}
 }
 
-func instrument(handler http.Handler) (http.Handler, http.Handler) {
+func instrument(handler http.Handler, bucketCount int) (http.Handler, http.Handler) {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	buckets := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "minigate_configured_buckets",
+		Help: "Number of configured public bucket routes in this replica.",
+	})
+	buckets.Set(float64(bucketCount))
 	requests := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "minigate_http_requests_total",
 		Help: "Total HTTP requests by status code and method, excluding health probes.",
@@ -94,7 +99,7 @@ func instrument(handler http.Handler) (http.Handler, http.Handler) {
 		Help:    "HTTP request duration in seconds, excluding health probes.",
 		Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 	}, []string{"code", "method"})
-	registry.MustRegister(requests, duration)
+	registry.MustRegister(buckets, requests, duration)
 	instrumented := promhttp.InstrumentHandlerCounter(requests, promhttp.InstrumentHandlerDuration(duration, handler))
 	app := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
