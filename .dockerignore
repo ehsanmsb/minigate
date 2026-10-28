@@ -1,0 +1,6 @@
+.git
+.github
+charts
+docs
+*.md
+config.yaml

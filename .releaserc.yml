@@ -1,0 +1,31 @@
+branches:
+  - main
+tagFormat: v${version}
+plugins:
+  - - '@semantic-release/commit-analyzer'
+    - preset: conventionalcommits
+      releaseRules:
+        - breaking: true
+          release: major
+        - type: feat
+          release: minor
+        - type: '*'
+          release: patch
+  - - '@semantic-release/release-notes-generator'
+    - preset: conventionalcommits
+  - - '@semantic-release/exec'
+    - analyzeCommitsCmd: "printf patch"
+      prepareCmd: |
+        set -eu
+        version="${nextRelease.version}"
+        mkdir -p dist
+        helm package charts/minigate --destination dist --version "$version" --app-version "$version"
+        docker buildx build --platform linux/amd64,linux/arm64 --push \
+          --tag "$IMAGE_NAME:$version" \
+          --tag "$IMAGE_NAME:latest" \
+          --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+          --label "org.opencontainers.image.version=$version" \
+          .
+  - - '@semantic-release/github'
+    - assets:
+        - dist/*.tgz

@@ -1,5 +1,7 @@
 # MiniGate
 
+[Documentation](docs/README.md) · [Kubernetes deployment](docs/deployment.md) · [Releases](docs/releases.md)
+
 MiniGate exposes selected private S3-compatible buckets through public, read-only URLs. Each configured name has its own storage endpoint and credentials. The only object operation is `GetObject`.
 
 ```text
