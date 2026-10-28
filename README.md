@@ -42,7 +42,7 @@ Give each configured credential `GetObject` permission only for the intended pre
 go run ./cmd/minigate -config config.yaml -addr :8080
 ```
 
-The service accepts `GET /{name}/{object-key}` and `GET /health`. Other methods return 405. A missing object returns 404; storage failures return 502. `Range` requests are forwarded to storage for partial downloads. S3 content metadata is forwarded in the response.
+The service accepts `GET /{name}/{object-key}` and `GET /health`. Other methods return 405. A missing or inaccessible object returns 404; storage failures return 502. S3 can return `AccessDenied` for a missing object when credentials lack `ListBucket`, so MiniGate maps that error to 404 and logs it. `Range` requests are forwarded to storage for partial downloads. S3 content metadata is forwarded in the response.
 
 HTTP routing uses [chi](https://github.com/go-chi/chi); storage access uses the official AWS SDK for Go v2. The HTTP server itself uses Go's standard `net/http` package.
 

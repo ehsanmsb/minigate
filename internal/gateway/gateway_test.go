@@ -184,6 +184,8 @@ func TestGetObjectErrorStatus(t *testing.T) {
 		want int
 	}{
 		{"missing", &smithy.GenericAPIError{Code: "NoSuchKey"}, http.StatusNotFound},
+		{"missing without list permission", &smithy.GenericAPIError{Code: "AccessDenied"}, http.StatusNotFound},
+		{"invalid credential", &smithy.GenericAPIError{Code: "InvalidAccessKeyId"}, http.StatusBadGateway},
 		{"storage failure", errors.New("connection failed"), http.StatusBadGateway},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

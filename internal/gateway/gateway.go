@@ -101,6 +101,11 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 			case "NoSuchKey", "NotFound":
 				http.NotFound(w, r)
 				return
+			case "AccessDenied":
+				// Without ListBucket, S3 also returns AccessDenied for missing keys.
+				log.Printf("S3 GetObject denied for route %q: %v", name, err)
+				http.NotFound(w, r)
+				return
 			case "InvalidRange":
 				http.Error(w, "invalid range", http.StatusRequestedRangeNotSatisfiable)
 				return
