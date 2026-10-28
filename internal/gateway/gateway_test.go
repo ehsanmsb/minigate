@@ -1,9 +1,12 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -195,6 +198,45 @@ func TestGetObjectErrorStatus(t *testing.T) {
 				t.Errorf("status=%d want=%d", w.Code, tc.want)
 			}
 		})
+	}
+}
+
+func TestRequestLogs(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	h := testHandler(&fakeStorage{err: &smithy.GenericAPIError{Code: "AccessDenied"}})
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/health", nil))
+	if output.Len() != 0 {
+		t.Fatal("health probe should not be logged")
+	}
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/avatars/public/private-file.png", nil))
+	if bytes.Count(output.Bytes(), []byte{'\n'}) != 1 || bytes.Contains(output.Bytes(), []byte("private-file.png")) {
+		t.Fatalf("expected one log without object key: %s", output.String())
+	}
+	var record struct {
+		Status int    `json:"status"`
+		Reason string `json:"reason"`
+		Route  string `json:"route"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &record); err != nil {
+		t.Fatal(err)
+	}
+	if record.Status != http.StatusNotFound || record.Reason != "access_denied" || record.Route != "avatars" {
+		t.Fatalf("unexpected log: %+v", record)
+	}
+
+	output.Reset()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/avatars/public/private-file.png", nil))
+	if output.Len() != 0 {
+		t.Fatal("expected denied request to be quiet at WARN level")
+	}
+	testHandler(&fakeStorage{err: errors.New("connection failed")}).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/avatars/public/file.png", nil))
+	if bytes.Count(output.Bytes(), []byte{'\n'}) != 1 || !bytes.Contains(output.Bytes(), []byte(`"reason":"storage_error"`)) {
+		t.Fatalf("expected one storage error log: %s", output.String())
 	}
 }
 

@@ -1,4 +1,5 @@
 replicaCount: 1
+logLevel: WARN
 
 image:
   repository: ghcr.io/ehsanmsb/minigate

@@ -11,6 +11,8 @@ helm upgrade --install minigate ./charts/minigate \
 
 The Secret needs a `config.yaml` key. Every replica mounts the same Secret read-only and starts with the same routes. Change the Secret and restart the Deployment to load a new configuration. The application has no shared state or database.
 
+The chart defaults to `logLevel: WARN`, so routine requests do not fill the logs. Use `--set logLevel=INFO` to include access denials and invalid ranges, or `--set logLevel=DEBUG` to record every object request. Health probes stay silent.
+
 For a public hostname, configure your ingress controller and TLS Secret, then enable the optional Ingress:
 
 ```sh

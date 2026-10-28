@@ -28,6 +28,9 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["-config", "/etc/minigate/config.yaml"]
+          env:
+            - name: MINIGATE_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
           ports:
             - name: http
               containerPort: 8080
