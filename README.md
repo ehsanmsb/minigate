@@ -1,5 +1,7 @@
 # MiniGate
 
+[Documentation](docs/README.md) · [Kubernetes deployment](docs/deployment.md) · [Releases](docs/releases.md)
+
 MiniGate exposes selected private S3-compatible buckets through public, read-only URLs. Each configured name has its own storage endpoint and credentials. The only object operation is `GetObject`.
 
 ```text
@@ -40,7 +42,11 @@ Give each configured credential `GetObject` permission only for the intended pre
 go run ./cmd/minigate -config config.yaml -addr :8080
 ```
 
-The service accepts `GET /{name}/{object-key}` and `GET /health`. Other methods return 405. A missing object returns 404; storage failures return 502. `Range` requests are forwarded to storage for partial downloads. S3 content metadata is forwarded in the response.
+Prometheus metrics are served separately at `127.0.0.1:9090/metrics` by default. Set `-metrics-addr` to change the listener. Metrics include `minigate_configured_buckets`, request counts and durations by HTTP status and method, plus Go runtime and process metrics. Health probes are excluded from request counts. Object keys and bucket names are not metric labels. Prometheus itself supplies `up` for each scrape target; `GET /health` remains the Kubernetes health check.
+
+The service accepts `GET /{name}/{object-key}` and `GET /health`. Other methods return 405. A missing or inaccessible object returns 404; storage failures return 502. S3 can return `AccessDenied` for a missing object when credentials lack `ListBucket`, so MiniGate maps that error to 404. `Range` requests are forwarded to storage for partial downloads. S3 content metadata is forwarded in the response.
+
+Logs are JSON on standard output. `MINIGATE_LOG_LEVEL` accepts `DEBUG`, `INFO`, `WARN`, or `ERROR` (default `WARN`). Unexpected storage and server failures are logged by default. Set `INFO` to also see access denials and invalid ranges, or `DEBUG` for one compact record per object request, including successful reads and expected 404s. Health probes are not logged. Routine request logs omit object keys and credentials.
 
 HTTP routing uses [chi](https://github.com/go-chi/chi); storage access uses the official AWS SDK for Go v2. The HTTP server itself uses Go's standard `net/http` package.
 

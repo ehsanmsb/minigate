@@ -1,0 +1,6 @@
+apiVersion: v2
+name: minigate
+description: Read-only gateway for private S3-compatible buckets
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

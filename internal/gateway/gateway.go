@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -55,6 +55,14 @@ func New(cfg *config.Config) *Handler {
 		_, _ = io.WriteString(w, "ok")
 	})
 	r.Get("/{name}/*", h.getObject)
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		slog.Debug("request", "status", http.StatusNotFound, "reason", "unknown_route")
+		http.NotFound(w, r)
+	})
+	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		slog.Debug("request", "status", http.StatusMethodNotAllowed, "reason", "method_not_allowed")
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	})
 	h.router = r
 	return h
 }
@@ -67,11 +75,13 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 	name, nameErr := routeParam(r, "name")
 	key, keyErr := routeParam(r, "*")
 	if nameErr != nil || keyErr != nil || name == "" || key == "" || hasDotSegment(key) {
+		slog.Debug("request", "status", http.StatusNotFound, "reason", "invalid_path")
 		http.NotFound(w, r)
 		return
 	}
 	selected, ok := h.routes[name]
 	if !ok {
+		slog.Debug("request", "status", http.StatusNotFound, "reason", "unknown_route", "route", name)
 		http.NotFound(w, r)
 		return
 	}
@@ -84,12 +94,14 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !allowed {
+			slog.Debug("request", "status", http.StatusNotFound, "reason", "path_not_allowed", "route", name)
 			http.NotFound(w, r)
 			return
 		}
 	}
 	input := &s3.GetObjectInput{Bucket: aws.String(selected.bucket), Key: aws.String(key)}
-	if value := r.Header.Get("Range"); value != "" {
+	// A full response is safe when we cannot check the client's If-Range validator.
+	if value := r.Header.Get("Range"); strings.HasPrefix(value, "bytes=") && r.Header.Get("If-Range") == "" {
 		input.Range = aws.String(value)
 	}
 	obj, err := selected.client.GetObject(r.Context(), input)
@@ -98,19 +110,26 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &apiErr) {
 			switch apiErr.ErrorCode() {
 			case "NoSuchKey", "NotFound":
+				slog.Debug("request", "status", http.StatusNotFound, "reason", "missing_object", "route", name)
+				http.NotFound(w, r)
+				return
+			case "AccessDenied":
+				// Without ListBucket, S3 also returns AccessDenied for missing keys.
+				slog.Info("request", "status", http.StatusNotFound, "reason", "access_denied", "route", name)
 				http.NotFound(w, r)
 				return
 			case "InvalidRange":
+				slog.Info("request", "status", http.StatusRequestedRangeNotSatisfiable, "reason", "invalid_range", "route", name)
 				http.Error(w, "invalid range", http.StatusRequestedRangeNotSatisfiable)
 				return
 			}
 		}
-		log.Printf("S3 GetObject failed for route %q: %v", name, err)
+		slog.Error("request", "status", http.StatusBadGateway, "reason", "storage_error", "route", name, "error", err)
 		http.Error(w, "storage unavailable", http.StatusBadGateway)
 		return
 	}
 	if obj.Body == nil {
-		log.Printf("S3 GetObject returned no body for route %q", name)
+		slog.Error("request", "status", http.StatusBadGateway, "reason", "empty_storage_body", "route", name)
 		http.Error(w, "storage unavailable", http.StatusBadGateway)
 		return
 	}
@@ -134,9 +153,16 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusPartialContent
 	}
 	w.WriteHeader(status)
-	if _, err := io.Copy(w, obj.Body); err != nil {
-		log.Printf("stream S3 object from route %q: %v", name, err)
+	bytes, err := io.Copy(w, obj.Body)
+	if err != nil {
+		if r.Context().Err() != nil {
+			slog.Debug("request", "status", status, "reason", "client_disconnected", "route", name, "bytes", bytes)
+		} else {
+			slog.Error("request", "status", status, "reason", "stream_error", "route", name, "bytes", bytes, "error", err)
+		}
+		return
 	}
+	slog.Debug("request", "status", status, "reason", "ok", "route", name, "bytes", bytes)
 }
 
 func routeParam(r *http.Request, name string) (string, error) {

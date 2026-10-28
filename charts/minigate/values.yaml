@@ -1,0 +1,29 @@
+replicaCount: 1
+logLevel: WARN
+
+image:
+  repository: ghcr.io/ehsanmsb/minigate
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Create this Secret separately. Its config.yaml key contains S3 credentials.
+existingSecret: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  metricsPort: 9090
+
+serviceMonitor:
+  enabled: false
+  additionalLabels: {}
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  tlsSecretName: ""
+
+resources: {}
