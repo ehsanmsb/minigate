@@ -21,7 +21,6 @@ type Bucket struct {
 	Region       string   `yaml:"region"`
 	AccessKey    string   `yaml:"access_key"`
 	SecretKey    string   `yaml:"secret_key"`
-	Path         string   `yaml:"path"`
 	StripPath    bool     `yaml:"strip_path"`
 	AllowedPaths []string `yaml:"allowed_paths"`
 }
@@ -72,18 +71,11 @@ func Load(filename string) (*Config, error) {
 		if b.Region == "" {
 			b.Region = "us-east-1"
 		}
-		b.Path = strings.Trim(b.Path, "/")
-		if hasDotSegment(b.Path) {
-			return nil, fmt.Errorf("bucket %q: path contains a dot segment", b.Name)
-		}
-		if b.StripPath && b.Path == "" {
-			return nil, fmt.Errorf("bucket %q: strip_path requires path", b.Name)
-		}
 		if b.AllowedPaths != nil && len(b.AllowedPaths) == 0 {
 			return nil, fmt.Errorf("bucket %q: allowed_paths cannot be empty", b.Name)
 		}
-		if b.Path != "" && len(b.AllowedPaths) > 0 {
-			return nil, fmt.Errorf("bucket %q: use path or allowed_paths, not both", b.Name)
+		if b.StripPath && len(b.AllowedPaths) != 1 {
+			return nil, fmt.Errorf("bucket %q: strip_path requires exactly one allowed path", b.Name)
 		}
 		for j, allowed := range b.AllowedPaths {
 			allowed = strings.Trim(allowed, "/")

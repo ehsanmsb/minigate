@@ -30,9 +30,9 @@ buckets:
 
 `name` is the first URL path segment; `bucket` is the actual storage bucket. If `bucket` is omitted, it defaults to `name`. `allowed_paths` lists the directories to expose within one bucket. In the example, `/avatars/public/photos/profile.png` reads the same key `public/photos/profile.png` in `private-images`. Every object under `public/photos/` and `public/icons/` is public; keys under other prefixes return 404. The directory names remain in the public URL.
 
-For a single directory, use `path: public/photos` instead of `allowed_paths`; it has the same visible URL behavior. Set `strip_path: true` with `path` only if you want `/avatars/profile.png` to read `public/photos/profile.png`. `path` and `allowed_paths` cannot be combined. If both are omitted, the whole bucket is public through this route. If `region` is omitted, it defaults to `us-east-1`. Public names must be unique.
+For a single directory, give `allowed_paths` one entry. Set `strip_path: true` only with one allowed path if you want `/avatars/profile.png` to read `public/photos/profile.png`. If `allowed_paths` is omitted, the whole bucket is public through this route. If `region` is omitted, it defaults to `us-east-1`. Public names must be unique.
 
-**Migration:** Existing configurations that used `path` with a hidden prefix need `strip_path: true` to keep their old public URLs.
+**Migration:** Replace `path: public` with `allowed_paths: [public]` and `strip_path: true` to keep the old public URLs. For a visible prefix, omit `strip_path`.
 
 Give each configured credential `GetObject` permission only for the intended prefixes when the storage provider supports that policy. Keep the configuration with your deployment secrets; do not commit real credentials. The public URL allows anyone to read every object reachable through that route.
 

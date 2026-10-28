@@ -31,7 +31,7 @@ func (f *fakeStorage) GetObject(_ context.Context, input *s3.GetObjectInput, _ .
 func testHandler(f *fakeStorage) *Handler {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
-		Region: "us-east-1", AccessKey: "access", SecretKey: "secret", Path: "public",
+		Region: "us-east-1", AccessKey: "access", SecretKey: "secret", AllowedPaths: []string{"public"},
 	}}})
 	r := h.routes["avatars"]
 	r.client = f
