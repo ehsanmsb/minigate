@@ -24,11 +24,11 @@ type objectGetter interface {
 }
 
 type route struct {
-	bucket      string
-	prefix      string
-	stripPath   bool
-	allowedKeys map[string]struct{}
-	client      objectGetter
+	bucket       string
+	prefix       string
+	stripPath    bool
+	allowedPaths []string
+	client       objectGetter
 }
 
 type Handler struct {
@@ -47,14 +47,7 @@ func New(cfg *config.Config) *Handler {
 			o.BaseEndpoint = aws.String(b.Endpoint)
 			o.UsePathStyle = true
 		})
-		var allowedKeys map[string]struct{}
-		if len(b.AllowedKeys) > 0 {
-			allowedKeys = make(map[string]struct{}, len(b.AllowedKeys))
-			for _, key := range b.AllowedKeys {
-				allowedKeys[key] = struct{}{}
-			}
-		}
-		routes[b.Name] = route{bucket: b.Bucket, prefix: b.Path, stripPath: b.StripPath, allowedKeys: allowedKeys, client: client}
+		routes[b.Name] = route{bucket: b.Bucket, prefix: b.Path, stripPath: b.StripPath, allowedPaths: b.AllowedPaths, client: client}
 	}
 	h := &Handler{routes: routes}
 	r := chi.NewRouter()
@@ -92,8 +85,15 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if len(selected.allowedKeys) > 0 {
-		if _, ok := selected.allowedKeys[key]; !ok {
+	if len(selected.allowedPaths) > 0 {
+		allowed := false
+		for _, prefix := range selected.allowedPaths {
+			if strings.HasPrefix(key, prefix+"/") {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
 			http.NotFound(w, r)
 			return
 		}

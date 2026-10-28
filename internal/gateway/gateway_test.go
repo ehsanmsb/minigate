@@ -88,26 +88,39 @@ func TestStripPathKeepsPreviousURLMapping(t *testing.T) {
 	}
 }
 
-func TestAllowedKeysExposeOnlySelectedFiles(t *testing.T) {
-	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
-	h := New(&config.Config{Buckets: []config.Bucket{{
-		Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
-		Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
-		Path: "public", AllowedKeys: []string{"public/a.png", "public/b.png"},
-	}}})
-	r := h.routes["avatars"]
-	r.client = f
-	h.routes["avatars"] = r
-
-	allowed := httptest.NewRecorder()
-	h.ServeHTTP(allowed, httptest.NewRequest(http.MethodGet, "/avatars/public/a.png", nil))
-	if allowed.Code != http.StatusOK || aws.ToString(f.input.Key) != "public/a.png" {
-		t.Errorf("allowed status=%d key=%q", allowed.Code, aws.ToString(f.input.Key))
-	}
-	blocked := httptest.NewRecorder()
-	h.ServeHTTP(blocked, httptest.NewRequest(http.MethodGet, "/avatars/public/c.png", nil))
-	if blocked.Code != http.StatusNotFound || f.calls != 1 {
-		t.Errorf("blocked status=%d storage calls=%d", blocked.Code, f.calls)
+func TestAllowedPathsExposeOnlySelectedDirectories(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want int
+		key  string
+	}{
+		{"/avatars/photos/public/a.png", http.StatusOK, "photos/public/a.png"},
+		{"/avatars/docs/shared/nested/file.pdf", http.StatusOK, "docs/shared/nested/file.pdf"},
+		{"/avatars/photos/private/a.png", http.StatusNotFound, ""},
+		{"/avatars/photos/publicity/a.png", http.StatusNotFound, ""},
+		{"/avatars/docs/shared-old/file.pdf", http.StatusNotFound, ""},
+		{"/avatars/photos/public/../private/a.png", http.StatusNotFound, ""},
+	} {
+		f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
+		h := New(&config.Config{Buckets: []config.Bucket{{
+			Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
+			Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
+			AllowedPaths: []string{"photos/public", "docs/shared"},
+		}}})
+		r := h.routes["avatars"]
+		r.client = f
+		h.routes["avatars"] = r
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.url, nil))
+		if w.Code != tc.want {
+			t.Errorf("url=%q status=%d want=%d", tc.url, w.Code, tc.want)
+		}
+		if tc.want == http.StatusOK && (f.calls != 1 || aws.ToString(f.input.Key) != tc.key) {
+			t.Errorf("url=%q calls=%d key=%q", tc.url, f.calls, aws.ToString(f.input.Key))
+		}
+		if tc.want == http.StatusNotFound && f.calls != 0 {
+			t.Errorf("url=%q reached storage", tc.url)
+		}
 	}
 }
 

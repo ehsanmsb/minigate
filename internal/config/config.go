@@ -15,15 +15,15 @@ type Config struct {
 }
 
 type Bucket struct {
-	Name        string   `yaml:"name"`
-	Bucket      string   `yaml:"bucket"`
-	Endpoint    string   `yaml:"endpoint"`
-	Region      string   `yaml:"region"`
-	AccessKey   string   `yaml:"access_key"`
-	SecretKey   string   `yaml:"secret_key"`
-	Path        string   `yaml:"path"`
-	StripPath   bool     `yaml:"strip_path"`
-	AllowedKeys []string `yaml:"allowed_keys"`
+	Name         string   `yaml:"name"`
+	Bucket       string   `yaml:"bucket"`
+	Endpoint     string   `yaml:"endpoint"`
+	Region       string   `yaml:"region"`
+	AccessKey    string   `yaml:"access_key"`
+	SecretKey    string   `yaml:"secret_key"`
+	Path         string   `yaml:"path"`
+	StripPath    bool     `yaml:"strip_path"`
+	AllowedPaths []string `yaml:"allowed_paths"`
 }
 
 func Load(filename string) (*Config, error) {
@@ -79,13 +79,18 @@ func Load(filename string) (*Config, error) {
 		if b.StripPath && b.Path == "" {
 			return nil, fmt.Errorf("bucket %q: strip_path requires path", b.Name)
 		}
-		if b.AllowedKeys != nil && len(b.AllowedKeys) == 0 {
-			return nil, fmt.Errorf("bucket %q: allowed_keys cannot be empty", b.Name)
+		if b.AllowedPaths != nil && len(b.AllowedPaths) == 0 {
+			return nil, fmt.Errorf("bucket %q: allowed_paths cannot be empty", b.Name)
 		}
-		for _, key := range b.AllowedKeys {
-			if key == "" || hasDotSegment(key) {
-				return nil, fmt.Errorf("bucket %q: invalid allowed key %q", b.Name, key)
+		if b.Path != "" && len(b.AllowedPaths) > 0 {
+			return nil, fmt.Errorf("bucket %q: use path or allowed_paths, not both", b.Name)
+		}
+		for j, allowed := range b.AllowedPaths {
+			allowed = strings.Trim(allowed, "/")
+			if allowed == "" || hasDotSegment(allowed) {
+				return nil, fmt.Errorf("bucket %q: invalid allowed path %q", b.Name, b.AllowedPaths[j])
 			}
+			b.AllowedPaths[j] = allowed
 		}
 	}
 	return &cfg, nil

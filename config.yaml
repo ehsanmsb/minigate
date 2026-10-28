@@ -5,6 +5,6 @@ buckets:
     region: us-east-1
     access_key: "ACCESS_KEY"
     secret_key: "SECRET_KEY"
-    path: public
-    allowed_keys:
-      - public/example.png
+    allowed_paths:
+      - public/photos
+      - public/icons
