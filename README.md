@@ -3,8 +3,8 @@
 MiniGate exposes selected private S3-compatible buckets through public, read-only URLs. Each configured name has its own storage endpoint and credentials. The only object operation is `GetObject`.
 
 ```text
-GET https://files.example.com/avatars/photos/profile.png
-                              │       └─ object key
+GET https://files.example.com/avatars/public/photos/profile.png
+                              │       └─ full object key
                               └─ public name configured below
 ```
 
@@ -19,6 +19,9 @@ buckets:
     access_key: ACCESS_KEY
     secret_key: SECRET_KEY
     path: public
+    allowed_keys:
+      - public/photos/profile.png
+      - public/photos/cover.png
   - name: documents
     bucket: project-documents
     endpoint: https://objects.other-provider.example
@@ -26,9 +29,13 @@ buckets:
     secret_key: OTHER_SECRET_KEY
 ```
 
-`name` is the first URL path segment; `bucket` is the actual storage bucket. If `bucket` is omitted, it defaults to `name`. `path` is an optional key prefix, so `/avatars/photos/profile.png` reads `public/photos/profile.png` in `private-images`. Omit `path` or set it to `""` to expose keys from the bucket root. If `region` is omitted, it defaults to `us-east-1`. Bucket names in the configuration must be unique.
+`name` is the first URL path segment; `bucket` is the actual storage bucket. If `bucket` is omitted, it defaults to `name`. `path` is an optional allowed prefix that remains visible in the URL: `/avatars/public/photos/profile.png` reads the same key `public/photos/profile.png` in `private-images`. With `path: public`, other prefixes return 404. Set `strip_path: true` on that bucket only if you want the old URL form `/avatars/photos/profile.png` to read `public/photos/profile.png`. `strip_path` requires `path`.
 
-Give each configured credential permission to read only its intended bucket's objects. Keep the configuration with your deployment secrets; do not commit real credentials. The public URL allows anyone to read every object reachable through that route.
+`allowed_keys` limits a route to exact S3 keys. In the example, only the two listed image files are public; other files under `public/` return 404. If `allowed_keys` is omitted, every object under `path` is public. If both `path` and `allowed_keys` are omitted, the whole bucket is public through this route. If `region` is omitted, it defaults to `us-east-1`. Public names must be unique.
+
+**Migration:** Existing configurations that used `path` with a hidden prefix need `strip_path: true` to keep their old public URLs.
+
+Give each configured credential `GetObject` permission only for the intended keys or prefix when the storage provider supports that policy. Keep the configuration with your deployment secrets; do not commit real credentials. The public URL allows anyone to read every object reachable through that route.
 
 ## Run
 

@@ -46,7 +46,7 @@ func TestGetObjectUsesConfiguredBucketAndPrefix(t *testing.T) {
 		ContentLength: aws.Int64(5),
 	}}
 	w := httptest.NewRecorder()
-	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/photos/a.png", nil))
+	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/public/photos/a.png", nil))
 	if w.Code != http.StatusOK || w.Body.String() != "image" {
 		t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
 	}
@@ -65,7 +65,7 @@ func TestGetObjectUsesConfiguredBucketAndPrefix(t *testing.T) {
 }
 
 func TestGetObjectRejectsPrefixEscape(t *testing.T) {
-	for _, url := range []string{"/avatars/../secret", "/avatars/%2e%2e/secret"} {
+	for _, url := range []string{"/avatars/public/../secret", "/avatars/public/%2e%2e/secret", "/avatars/private/secret"} {
 		f := &fakeStorage{}
 		w := httptest.NewRecorder()
 		testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
@@ -75,10 +75,46 @@ func TestGetObjectRejectsPrefixEscape(t *testing.T) {
 	}
 }
 
+func TestStripPathKeepsPreviousURLMapping(t *testing.T) {
+	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
+	h := testHandler(f)
+	r := h.routes["avatars"]
+	r.stripPath = true
+	h.routes["avatars"] = r
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/photos/a.png", nil))
+	if w.Code != http.StatusOK || aws.ToString(f.input.Key) != "public/photos/a.png" {
+		t.Errorf("status=%d key=%q", w.Code, aws.ToString(f.input.Key))
+	}
+}
+
+func TestAllowedKeysExposeOnlySelectedFiles(t *testing.T) {
+	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
+	h := New(&config.Config{Buckets: []config.Bucket{{
+		Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
+		Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
+		Path: "public", AllowedKeys: []string{"public/a.png", "public/b.png"},
+	}}})
+	r := h.routes["avatars"]
+	r.client = f
+	h.routes["avatars"] = r
+
+	allowed := httptest.NewRecorder()
+	h.ServeHTTP(allowed, httptest.NewRequest(http.MethodGet, "/avatars/public/a.png", nil))
+	if allowed.Code != http.StatusOK || aws.ToString(f.input.Key) != "public/a.png" {
+		t.Errorf("allowed status=%d key=%q", allowed.Code, aws.ToString(f.input.Key))
+	}
+	blocked := httptest.NewRecorder()
+	h.ServeHTTP(blocked, httptest.NewRequest(http.MethodGet, "/avatars/public/c.png", nil))
+	if blocked.Code != http.StatusNotFound || f.calls != 1 {
+		t.Errorf("blocked status=%d storage calls=%d", blocked.Code, f.calls)
+	}
+}
+
 func TestEncodedPercentIsNotDecodedTwice(t *testing.T) {
 	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
 	w := httptest.NewRecorder()
-	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/%252e%252e/file", nil))
+	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/public/%252e%252e/file", nil))
 	if w.Code != http.StatusOK || aws.ToString(f.input.Key) != "public/%2e%2e/file" {
 		t.Errorf("status=%d key=%q", w.Code, aws.ToString(f.input.Key))
 	}
@@ -92,7 +128,7 @@ func TestRouterOnlyAllowsGet(t *testing.T) {
 		want   int
 	}{
 		{http.MethodGet, "/health", http.StatusOK},
-		{http.MethodPost, "/avatars/file", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/avatars/public/file", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/missing/file", http.StatusNotFound},
 	} {
 		w := httptest.NewRecorder()
@@ -109,7 +145,7 @@ func TestGetObjectRange(t *testing.T) {
 		ContentRange:  aws.String("bytes 0-3/10"),
 		ContentLength: aws.Int64(4),
 	}}
-	request := httptest.NewRequest(http.MethodGet, "/avatars/video.mp4", nil)
+	request := httptest.NewRequest(http.MethodGet, "/avatars/public/video.mp4", nil)
 	request.Header.Set("Range", "bytes=0-3")
 	w := httptest.NewRecorder()
 	testHandler(f).ServeHTTP(w, request)
@@ -129,7 +165,7 @@ func TestGetObjectErrorStatus(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			testHandler(&fakeStorage{err: tc.err}).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/a.png", nil))
+			testHandler(&fakeStorage{err: tc.err}).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/public/a.png", nil))
 			if w.Code != tc.want {
 				t.Errorf("status=%d want=%d", w.Code, tc.want)
 			}
