@@ -31,7 +31,7 @@ func (f *fakeStorage) GetObject(_ context.Context, input *s3.GetObjectInput, _ .
 func testHandler(f *fakeStorage) *Handler {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
-		Region: "us-east-1", AccessKey: "access", SecretKey: "secret", Path: "public",
+		Region: "us-east-1", AccessKey: "access", SecretKey: "secret", AllowedPaths: []string{"public"},
 	}}})
 	r := h.routes["avatars"]
 	r.client = f
@@ -46,7 +46,7 @@ func TestGetObjectUsesConfiguredBucketAndPrefix(t *testing.T) {
 		ContentLength: aws.Int64(5),
 	}}
 	w := httptest.NewRecorder()
-	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/photos/a.png", nil))
+	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/public/photos/a.png", nil))
 	if w.Code != http.StatusOK || w.Body.String() != "image" {
 		t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
 	}
@@ -65,12 +65,76 @@ func TestGetObjectUsesConfiguredBucketAndPrefix(t *testing.T) {
 }
 
 func TestGetObjectRejectsPrefixEscape(t *testing.T) {
-	for _, url := range []string{"/avatars/../secret", "/avatars/%2e%2e/secret"} {
+	for _, url := range []string{"/avatars/public/../secret", "/avatars/public/%2e%2e/secret", "/avatars/private/secret"} {
 		f := &fakeStorage{}
 		w := httptest.NewRecorder()
 		testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
 		if w.Code != http.StatusNotFound || f.calls != 0 {
 			t.Errorf("url=%q status=%d calls=%d", url, w.Code, f.calls)
+		}
+	}
+}
+
+func TestAllowedPathsExposeOnlySelectedDirectories(t *testing.T) {
+	for _, tc := range []struct {
+		url  string
+		want int
+		key  string
+	}{
+		{"/avatars/photos/public/a.png", http.StatusOK, "photos/public/a.png"},
+		{"/avatars/docs/shared/nested/file.pdf", http.StatusOK, "docs/shared/nested/file.pdf"},
+		{"/avatars/photos/private/a.png", http.StatusNotFound, ""},
+		{"/avatars/photos/publicity/a.png", http.StatusNotFound, ""},
+		{"/avatars/docs/shared-old/file.pdf", http.StatusNotFound, ""},
+		{"/avatars/photos/public/../private/a.png", http.StatusNotFound, ""},
+	} {
+		f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
+		h := New(&config.Config{Buckets: []config.Bucket{{
+			Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
+			Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
+			AllowedPaths: []string{"photos/public", "docs/shared"},
+		}}})
+		r := h.routes["avatars"]
+		r.client = f
+		h.routes["avatars"] = r
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.url, nil))
+		if w.Code != tc.want {
+			t.Errorf("url=%q status=%d want=%d", tc.url, w.Code, tc.want)
+		}
+		if tc.want == http.StatusOK && (f.calls != 1 || aws.ToString(f.input.Key) != tc.key) {
+			t.Errorf("url=%q calls=%d key=%q", tc.url, f.calls, aws.ToString(f.input.Key))
+		}
+		if tc.want == http.StatusNotFound && f.calls != 0 {
+			t.Errorf("url=%q reached storage", tc.url)
+		}
+	}
+}
+
+func TestEncodedPercentIsNotDecodedTwice(t *testing.T) {
+	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
+	w := httptest.NewRecorder()
+	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/public/%252e%252e/file", nil))
+	if w.Code != http.StatusOK || aws.ToString(f.input.Key) != "public/%2e%2e/file" {
+		t.Errorf("status=%d key=%q", w.Code, aws.ToString(f.input.Key))
+	}
+}
+
+func TestRouterOnlyAllowsGet(t *testing.T) {
+	h := testHandler(&fakeStorage{})
+	for _, tc := range []struct {
+		method string
+		path   string
+		want   int
+	}{
+		{http.MethodGet, "/health", http.StatusOK},
+		{http.MethodPost, "/avatars/public/file", http.StatusMethodNotAllowed},
+		{http.MethodGet, "/missing/file", http.StatusNotFound},
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != tc.want {
+			t.Errorf("%s %s status=%d want=%d", tc.method, tc.path, w.Code, tc.want)
 		}
 	}
 }
@@ -81,7 +145,7 @@ func TestGetObjectRange(t *testing.T) {
 		ContentRange:  aws.String("bytes 0-3/10"),
 		ContentLength: aws.Int64(4),
 	}}
-	request := httptest.NewRequest(http.MethodGet, "/avatars/video.mp4", nil)
+	request := httptest.NewRequest(http.MethodGet, "/avatars/public/video.mp4", nil)
 	request.Header.Set("Range", "bytes=0-3")
 	w := httptest.NewRecorder()
 	testHandler(f).ServeHTTP(w, request)
@@ -101,7 +165,7 @@ func TestGetObjectErrorStatus(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			testHandler(&fakeStorage{err: tc.err}).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/a.png", nil))
+			testHandler(&fakeStorage{err: tc.err}).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/public/a.png", nil))
 			if w.Code != tc.want {
 				t.Errorf("status=%d want=%d", w.Code, tc.want)
 			}

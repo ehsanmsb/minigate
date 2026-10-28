@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
 	"github.com/ehsanmsb/minigate/internal/config"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type objectGetter interface {
@@ -21,13 +24,14 @@ type objectGetter interface {
 }
 
 type route struct {
-	bucket string
-	prefix string
-	client objectGetter
+	bucket       string
+	allowedPaths []string
+	client       objectGetter
 }
 
 type Handler struct {
 	routes map[string]route
+	router http.Handler
 }
 
 func New(cfg *config.Config) *Handler {
@@ -41,29 +45,28 @@ func New(cfg *config.Config) *Handler {
 			o.BaseEndpoint = aws.String(b.Endpoint)
 			o.UsePathStyle = true
 		})
-		routes[b.Name] = route{bucket: b.Bucket, prefix: b.Path, client: client}
+		routes[b.Name] = route{bucket: b.Bucket, allowedPaths: b.AllowedPaths, client: client}
 	}
-	return &Handler{routes: routes}
+	h := &Handler{routes: routes}
+	r := chi.NewRouter()
+	r.Use(middleware.SetHeader("Access-Control-Allow-Origin", "*"))
+	r.Use(middleware.Recoverer)
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	})
+	r.Get("/{name}/*", h.getObject)
+	h.router = r
+	return h
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if r.URL.Path == "/health" {
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, "ok")
-		return
-	}
-	if !strings.HasPrefix(r.URL.Path, "/") {
-		http.NotFound(w, r)
-		return
-	}
-	name, key, ok := strings.Cut(r.URL.Path[1:], "/")
-	if !ok || name == "" || key == "" || hasDotSegment(key) {
+	h.router.ServeHTTP(w, r)
+}
+
+func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
+	name, nameErr := routeParam(r, "name")
+	key, keyErr := routeParam(r, "*")
+	if nameErr != nil || keyErr != nil || name == "" || key == "" || hasDotSegment(key) {
 		http.NotFound(w, r)
 		return
 	}
@@ -72,8 +75,18 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if selected.prefix != "" {
-		key = selected.prefix + "/" + key
+	if len(selected.allowedPaths) > 0 {
+		allowed := false
+		for _, prefix := range selected.allowedPaths {
+			if strings.HasPrefix(key, prefix+"/") {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			http.NotFound(w, r)
+			return
+		}
 	}
 	input := &s3.GetObjectInput{Bucket: aws.String(selected.bucket), Key: aws.String(key)}
 	if value := r.Header.Get("Range"); value != "" {
@@ -124,6 +137,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, obj.Body); err != nil {
 		log.Printf("stream S3 object from route %q: %v", name, err)
 	}
+}
+
+func routeParam(r *http.Request, name string) (string, error) {
+	value := chi.URLParam(r, name)
+	if r.URL.RawPath != "" {
+		return url.PathUnescape(value)
+	}
+	return value, nil
 }
 
 func copyHeader(h http.Header, name string, value *string) {
