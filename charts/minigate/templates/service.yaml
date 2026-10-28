@@ -10,6 +10,9 @@ spec:
     - name: http
       port: {{ .Values.service.port }}
       targetPort: http
+    - name: metrics
+      port: {{ .Values.service.metricsPort }}
+      targetPort: metrics
   selector:
     app.kubernetes.io/name: minigate
     app.kubernetes.io/instance: {{ .Release.Name }}

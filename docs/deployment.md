@@ -26,3 +26,5 @@ helm upgrade --install minigate ./charts/minigate \
 ```
 
 Use a released chart archive from a GitHub release for a matching image tag. If deploying directly from source before a release, set `image.tag` to an existing GHCR tag. The packaged chart defaults to its matching released image version. The service listens internally on port 8080; Kubernetes Service exposes port 80. `/health` is used for readiness and liveness. Ensure the cluster allows outbound HTTPS to each configured storage endpoint and can pull from GHCR.
+
+Prometheus metrics are available on the internal Service port `9090` at `/metrics`. The Ingress routes only to the file-serving port, so it does not expose metrics publicly. If your cluster has Prometheus Operator and its ServiceMonitor CRD, enable `--set serviceMonitor.enabled=true`; set `serviceMonitor.additionalLabels` as needed by your Prometheus selector. Each replica exports its own metrics, so scrape every pod through service discovery.

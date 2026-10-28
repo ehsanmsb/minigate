@@ -11,5 +11,5 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates && adduser -D -u 10001 minigate
 USER minigate
 COPY --from=build /minigate /usr/local/bin/minigate
-EXPOSE 8080
+EXPOSE 8080 9090
 ENTRYPOINT ["/usr/local/bin/minigate"]

@@ -14,6 +14,11 @@ existingSecret: ""
 service:
   type: ClusterIP
   port: 80
+  metricsPort: 9090
+
+serviceMonitor:
+  enabled: false
+  additionalLabels: {}
 
 ingress:
   enabled: false

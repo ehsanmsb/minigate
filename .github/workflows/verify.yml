@@ -21,7 +21,7 @@ jobs:
       - run: go build ./cmd/minigate
       - uses: azure/setup-helm@v4
       - run: helm lint charts/minigate --set existingSecret=minigate-config
-      - run: helm template minigate charts/minigate --set existingSecret=minigate-config --set replicaCount=3 --set ingress.enabled=true --set ingress.host=files.example.com --set ingress.tlsSecretName=files-tls > /dev/null
+      - run: helm template minigate charts/minigate --set existingSecret=minigate-config --set replicaCount=3 --set ingress.enabled=true --set ingress.host=files.example.com --set ingress.tlsSecretName=files-tls --set serviceMonitor.enabled=true > /dev/null
       - if: github.event_name == 'pull_request'
         run: docker build -t minigate:ci .
 
