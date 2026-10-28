@@ -89,7 +89,8 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	input := &s3.GetObjectInput{Bucket: aws.String(selected.bucket), Key: aws.String(key)}
-	if value := r.Header.Get("Range"); value != "" {
+	// A full response is safe when we cannot check the client's If-Range validator.
+	if value := r.Header.Get("Range"); strings.HasPrefix(value, "bytes=") && r.Header.Get("If-Range") == "" {
 		input.Range = aws.String(value)
 	}
 	obj, err := selected.client.GetObject(r.Context(), input)

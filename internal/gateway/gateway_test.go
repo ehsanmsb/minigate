@@ -154,6 +154,29 @@ func TestGetObjectRange(t *testing.T) {
 	}
 }
 
+func TestIfRangeDoesNotReturnUncheckedPartialObject(t *testing.T) {
+	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("whole file"))}}
+	request := httptest.NewRequest(http.MethodGet, "/avatars/public/video.mp4", nil)
+	request.Header.Set("Range", "bytes=5-")
+	request.Header.Set("If-Range", "\"old-version\"")
+	w := httptest.NewRecorder()
+	testHandler(f).ServeHTTP(w, request)
+	if w.Code != http.StatusOK || f.input.Range != nil {
+		t.Errorf("status=%d upstream range=%q", w.Code, aws.ToString(f.input.Range))
+	}
+}
+
+func TestUnknownRangeUnitIsIgnored(t *testing.T) {
+	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("whole file"))}}
+	request := httptest.NewRequest(http.MethodGet, "/avatars/public/video.mp4", nil)
+	request.Header.Set("Range", "items=0-3")
+	w := httptest.NewRecorder()
+	testHandler(f).ServeHTTP(w, request)
+	if w.Code != http.StatusOK || f.input.Range != nil {
+		t.Errorf("status=%d upstream range=%q", w.Code, aws.ToString(f.input.Range))
+	}
+}
+
 func TestGetObjectErrorStatus(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -190,5 +213,21 @@ func TestConfiguredEndpointUsesPathStyle(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public/folder/file.txt", nil))
 	if w.Code != http.StatusOK || w.Body.String() != "file" || upstreamPath != "/private-files/folder/file.txt" {
 		t.Fatalf("status=%d body=%q upstream path=%q", w.Code, w.Body.String(), upstreamPath)
+	}
+}
+
+func TestGenericStorage404ReturnsNotFound(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer upstream.Close()
+	h := New(&config.Config{Buckets: []config.Bucket{{
+		Name: "public", Bucket: "private-files", Endpoint: upstream.URL,
+		Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
+	}}})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public/missing.txt", nil))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d want=404", w.Code)
 	}
 }
