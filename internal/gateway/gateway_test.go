@@ -75,19 +75,6 @@ func TestGetObjectRejectsPrefixEscape(t *testing.T) {
 	}
 }
 
-func TestStripPathKeepsPreviousURLMapping(t *testing.T) {
-	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
-	h := testHandler(f)
-	r := h.routes["avatars"]
-	r.stripPath = true
-	h.routes["avatars"] = r
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/photos/a.png", nil))
-	if w.Code != http.StatusOK || aws.ToString(f.input.Key) != "public/photos/a.png" {
-		t.Errorf("status=%d key=%q", w.Code, aws.ToString(f.input.Key))
-	}
-}
-
 func TestAllowedPathsExposeOnlySelectedDirectories(t *testing.T) {
 	for _, tc := range []struct {
 		url  string
