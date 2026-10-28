@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
-	"github.com/ehsanmsb/minigate/internal/adapters/configadapter"
-	"github.com/ehsanmsb/minigate/internal/adapters/httpadapter"
-	"github.com/ehsanmsb/minigate/internal/adapters/s3adapter"
-	"github.com/ehsanmsb/minigate/internal/app"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/ehsanmsb/minigate/internal/config"
+	"github.com/ehsanmsb/minigate/internal/gateway"
 )
 
 func main() {
@@ -15,25 +19,34 @@ func main() {
 	addr := flag.String("addr", ":8080", "http listen address")
 	flag.Parse()
 
-	cfg, err := configadapter.Load(*configPath)
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	storage, err := s3adapter.NewFromConfig(cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
-	buckets := configadapter.ToDomainBucket(cfg.Buckets)
-
-	gateway := app.NewGateway(storage, buckets)
-	handler := httpadapter.NewGateHandler(gateway)
 	server := &http.Server{
-		Addr:    *addr,
-		Handler: handler.Router(),
+		Addr:              *addr,
+		Handler:           gateway.New(cfg),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	shutdownDone := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("shutdown: %v", err)
+		}
+		close(shutdownDone)
+	}()
 
 	log.Printf("minigate listening on %s", *addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
+	}
+	if ctx.Err() != nil {
+		<-shutdownDone
 	}
 }
