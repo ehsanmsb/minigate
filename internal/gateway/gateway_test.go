@@ -75,6 +75,34 @@ func TestGetObjectRejectsPrefixEscape(t *testing.T) {
 	}
 }
 
+func TestEncodedPercentIsNotDecodedTwice(t *testing.T) {
+	f := &fakeStorage{out: &s3.GetObjectOutput{Body: io.NopCloser(strings.NewReader("ok"))}}
+	w := httptest.NewRecorder()
+	testHandler(f).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/avatars/%252e%252e/file", nil))
+	if w.Code != http.StatusOK || aws.ToString(f.input.Key) != "public/%2e%2e/file" {
+		t.Errorf("status=%d key=%q", w.Code, aws.ToString(f.input.Key))
+	}
+}
+
+func TestRouterOnlyAllowsGet(t *testing.T) {
+	h := testHandler(&fakeStorage{})
+	for _, tc := range []struct {
+		method string
+		path   string
+		want   int
+	}{
+		{http.MethodGet, "/health", http.StatusOK},
+		{http.MethodPost, "/avatars/file", http.StatusMethodNotAllowed},
+		{http.MethodGet, "/missing/file", http.StatusNotFound},
+	} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != tc.want {
+			t.Errorf("%s %s status=%d want=%d", tc.method, tc.path, w.Code, tc.want)
+		}
+	}
+}
+
 func TestGetObjectRange(t *testing.T) {
 	f := &fakeStorage{out: &s3.GetObjectOutput{
 		Body:          io.NopCloser(strings.NewReader("data")),
