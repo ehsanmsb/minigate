@@ -43,10 +43,27 @@ ingress:
   host: ""
   tlsSecretName: ""
 
+# OpenShift Route. The router's default certificate must cover the assigned host.
+route:
+  enabled: false
+  host: "" # Leave empty to let OpenShift assign a hostname.
+  annotations: {}
+  tls:
+    enabled: true # Edge TLS with HTTP-to-HTTPS redirect.
+
+# Contour HTTPProxy requires the projectcontour.io CRD and a Contour controller.
+httpProxy:
+  enabled: false
+  fqdn: ""
+  tlsSecretName: "" # Optional TLS Secret in the release namespace.
+
 resources:
   requests:
     cpu: 100m
     memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
 
 livenessProbe:
   httpGet:

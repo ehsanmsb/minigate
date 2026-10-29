@@ -5,5 +5,12 @@ MiniGate is available inside the cluster at:
 File URLs are available at:
   {{ if .Values.ingress.tlsSecretName }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}/<public-name>/<object-key>
 {{- end }}
+{{- if .Values.route.enabled }}
+OpenShift Route: run `oc get route {{ include "minigate.fullname" . }}` to see its hostname.
+{{- end }}
+{{- if .Values.httpProxy.enabled }}
+Contour HTTPProxy file URLs:
+  {{ if .Values.httpProxy.tlsSecretName }}https{{ else }}http{{ end }}://{{ .Values.httpProxy.fqdn }}/<public-name>/<object-key>
+{{- end }}
 
 Prometheus metrics: port {{ .Values.service.metricsPort }}, path /metrics.

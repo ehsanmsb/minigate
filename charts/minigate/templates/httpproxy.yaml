@@ -1,0 +1,24 @@
+{{- if .Values.httpProxy.enabled }}
+{{- if not .Values.httpProxy.fqdn }}
+{{- fail "httpProxy.fqdn is required when httpProxy.enabled=true" }}
+{{- end }}
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: {{ include "minigate.fullname" . }}
+  labels:
+    {{- include "minigate.labels" . | nindent 4 }}
+spec:
+  virtualhost:
+    fqdn: {{ .Values.httpProxy.fqdn | quote }}
+    {{- with .Values.httpProxy.tlsSecretName }}
+    tls:
+      secretName: {{ . | quote }}
+    {{- end }}
+  routes:
+    - conditions:
+        - prefix: /
+      services:
+        - name: {{ include "minigate.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}
