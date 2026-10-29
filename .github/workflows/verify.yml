@@ -21,7 +21,15 @@ jobs:
       - run: go build ./cmd/minigate
       - uses: azure/setup-helm@v5
       - run: helm lint charts/minigate --set existingSecret=minigate-config
-      - run: helm template minigate charts/minigate --set existingSecret=minigate-config --set replicaCount=3 --set ingress.enabled=true --set ingress.host=files.example.com --set ingress.tlsSecretName=files-tls --set serviceMonitor.enabled=true > /dev/null
+      - name: Check Helm chart defaults and options
+        run: |
+          helm template minigate charts/minigate --set existingSecret=minigate-config > /tmp/minigate-default.yaml
+          ! grep -Eq '^kind: (Ingress|Route|HTTPProxy|ServiceMonitor|HorizontalPodAutoscaler|PodDisruptionBudget|ServiceAccount)$' /tmp/minigate-default.yaml
+          helm template minigate charts/minigate --set existingSecret=minigate-config --set autoscaling.enabled=true --set podDisruptionBudget.enabled=true --set serviceAccount.create=true --set ingress.enabled=true --set ingress.host=files.example.com --set ingress.tlsSecretName=files-tls --set serviceMonitor.enabled=true > /dev/null
+          helm template minigate charts/minigate --set existingSecret=minigate-config --set route.enabled=true > /tmp/minigate-route.yaml
+          grep -q '^kind: Route$' /tmp/minigate-route.yaml
+          helm template minigate charts/minigate --set existingSecret=minigate-config --set httpProxy.enabled=true --set httpProxy.fqdn=files.example.com --set httpProxy.tlsSecretName=files-tls > /tmp/minigate-httpproxy.yaml
+          grep -q '^kind: HTTPProxy$' /tmp/minigate-httpproxy.yaml
       - if: github.event_name == 'pull_request'
         run: docker build -t minigate:ci .
 

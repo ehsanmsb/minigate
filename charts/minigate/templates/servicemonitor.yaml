@@ -11,9 +11,9 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: minigate
-      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- include "minigate.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: metrics
       path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
 {{- end }}

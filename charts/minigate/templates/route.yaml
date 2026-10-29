@@ -1,0 +1,26 @@
+{{- if .Values.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "minigate.fullname" . }}
+  labels:
+    {{- include "minigate.labels" . | nindent 4 }}
+  {{- with .Values.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.route.host }}
+  host: {{ . | quote }}
+  {{- end }}
+  port:
+    targetPort: http
+  to:
+    kind: Service
+    name: {{ include "minigate.fullname" . }}
+  {{- if .Values.route.tls.enabled }}
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  {{- end }}
+{{- end }}
