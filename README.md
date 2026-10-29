@@ -46,7 +46,7 @@ Prometheus metrics are served separately at `127.0.0.1:9090/metrics` by default.
 
 The service accepts `GET /{name}/{object-key}` and `GET /health`. Other methods return 405. A missing or inaccessible object returns 404; storage failures return 502. S3 can return `AccessDenied` for a missing object when credentials lack `ListBucket`, so MiniGate maps that error to 404. `Range` requests are forwarded to storage for partial downloads. S3 content metadata is forwarded in the response.
 
-S3 response headers must arrive within 15 seconds per attempt. The entire object response, including retries and streaming, is limited to 5 minutes by default; set `-s3-timeout` to change that limit. A timeout before response headers returns 504. If streaming stalls after headers were sent, the connection ends and the failure is logged because its HTTP status cannot be changed.
+S3 response headers must arrive within 5 seconds per attempt. The entire object response, including retries and streaming, is limited to 15 seconds by default; set `-s3-timeout` to change that limit. A timeout before response headers returns 504. If streaming stalls after headers were sent, the connection ends and the failure is logged because its HTTP status cannot be changed.
 
 Logs are JSON on standard output. `MINIGATE_LOG_LEVEL` accepts `DEBUG`, `INFO`, `WARN`, or `ERROR` (default `WARN`). Unexpected storage and server failures are logged by default. Set `INFO` to also see access denials and invalid ranges, or `DEBUG` for one compact record per object request, including successful reads and expected 404s. Health probes are not logged. Routine request logs omit object keys and credentials.
 

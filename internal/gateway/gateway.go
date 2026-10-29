@@ -41,7 +41,7 @@ type Handler struct {
 func New(cfg *config.Config, timeout time.Duration) *Handler {
 	routes := make(map[string]route, len(cfg.Buckets))
 	httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(t *http.Transport) {
-		t.ResponseHeaderTimeout = min(timeout, 15*time.Second)
+		t.ResponseHeaderTimeout = min(timeout, 5*time.Second)
 	})
 	for _, b := range cfg.Buckets {
 		awsCfg := aws.Config{

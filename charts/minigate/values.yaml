@@ -12,7 +12,7 @@ imagePullSecrets: []
 # Create this Secret separately with a config.yaml key containing S3 credentials.
 existingSecret: ""
 logLevel: WARN
-s3Timeout: 5m # Maximum time to receive one S3 object, including its body.
+s3Timeout: 15s # Maximum time to receive one S3 object, including its body.
 
 serviceAccount:
   create: false
@@ -58,8 +58,7 @@ httpProxy:
   fqdn: ""
   tlsSecretName: "" # Optional TLS Secret in the release namespace.
   timeoutPolicy:
-    response: infinity # Do not cut off long downloads after Envoy's 15s default.
-    idle: 60s # Close a stream with no traffic for this long.
+    response: 20s # Slightly longer than the app's 15s limit, so it can return 504.
 
 resources:
   requests:

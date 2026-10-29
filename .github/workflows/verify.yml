@@ -30,8 +30,7 @@ jobs:
           grep -q '^kind: Route$' /tmp/minigate-route.yaml
           helm template minigate charts/minigate --set existingSecret=minigate-config --set httpProxy.enabled=true --set httpProxy.fqdn=files.example.com --set httpProxy.tlsSecretName=files-tls > /tmp/minigate-httpproxy.yaml
           grep -q '^kind: HTTPProxy$' /tmp/minigate-httpproxy.yaml
-          grep -q 'response: "infinity"' /tmp/minigate-httpproxy.yaml
-          grep -q 'idle: "60s"' /tmp/minigate-httpproxy.yaml
+          grep -q 'response: "20s"' /tmp/minigate-httpproxy.yaml
       - if: github.event_name == 'pull_request'
         run: docker build -t minigate:ci .
 
