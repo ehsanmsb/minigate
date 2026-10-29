@@ -1,0 +1,9 @@
+MiniGate is available inside the cluster at:
+  http://{{ include "minigate.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}/health
+
+{{- if .Values.ingress.enabled }}
+File URLs are available at:
+  {{ if .Values.ingress.tlsSecretName }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}/<public-name>/<object-key>
+{{- end }}
+
+Prometheus metrics: port {{ .Values.service.metricsPort }}, path /metrics.

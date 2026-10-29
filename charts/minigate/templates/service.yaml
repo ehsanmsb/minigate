@@ -14,5 +14,4 @@ spec:
       port: {{ .Values.service.metricsPort }}
       targetPort: metrics
   selector:
-    app.kubernetes.io/name: minigate
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "minigate.selectorLabels" . | nindent 4 }}

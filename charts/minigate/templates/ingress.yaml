@@ -8,6 +8,10 @@ metadata:
   name: {{ include "minigate.fullname" . }}
   labels:
     {{- include "minigate.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}

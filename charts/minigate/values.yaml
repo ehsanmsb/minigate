@@ -1,29 +1,78 @@
 replicaCount: 1
-logLevel: WARN
+
+nameOverride: ""
+fullnameOverride: ""
 
 image:
   repository: ghcr.io/ehsanmsb/minigate
-  tag: ""
   pullPolicy: IfNotPresent
-
+  tag: "" # Defaults to Chart.appVersion.
 imagePullSecrets: []
 
-# Create this Secret separately. Its config.yaml key contains S3 credentials.
+# Create this Secret separately with a config.yaml key containing S3 credentials.
 existingSecret: ""
+logLevel: WARN
+
+serviceAccount:
+  create: false
+  automount: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
 
 service:
   type: ClusterIP
   port: 80
   metricsPort: 9090
 
-serviceMonitor:
-  enabled: false
-  additionalLabels: {}
-
 ingress:
   enabled: false
   className: ""
+  annotations: {}
   host: ""
   tlsSecretName: ""
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+terminationGracePeriodSeconds: 35
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
+serviceMonitor:
+  enabled: false
+  additionalLabels: {}
+  interval: 30s
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

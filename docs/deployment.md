@@ -1,6 +1,6 @@
 # Kubernetes deployment
 
-The chart is in [`charts/minigate`](../charts/minigate). Create a Secret from a local configuration file; keep real credentials out of Git:
+The chart is in [`charts/minigate`](../charts/minigate); its [values and optional templates](../charts/minigate/README.md) are documented there. Create a Secret from a local configuration file; keep real credentials out of Git:
 
 ```sh
 kubectl create secret generic minigate-config --from-file=config.yaml=./private-config.yaml
@@ -10,6 +10,8 @@ helm upgrade --install minigate ./charts/minigate \
 ```
 
 The Secret needs a `config.yaml` key. Every replica mounts the same Secret read-only and starts with the same routes. Change the Secret and restart the Deployment to load a new configuration. The application has no shared state or database.
+
+Only Deployment and Service are enabled by default. For three fixed replicas and protection against one voluntary eviction, add `--set podDisruptionBudget.enabled=true` to the install command. HPA and ServiceAccount also default to disabled; enable them only when needed.
 
 The chart defaults to `logLevel: WARN`, so routine requests do not fill the logs. Use `--set logLevel=INFO` to include access denials and invalid ranges, or `--set logLevel=DEBUG` to record every object request. Health probes stay silent.
 

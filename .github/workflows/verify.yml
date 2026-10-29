@@ -21,7 +21,11 @@ jobs:
       - run: go build ./cmd/minigate
       - uses: azure/setup-helm@v5
       - run: helm lint charts/minigate --set existingSecret=minigate-config
-      - run: helm template minigate charts/minigate --set existingSecret=minigate-config --set replicaCount=3 --set ingress.enabled=true --set ingress.host=files.example.com --set ingress.tlsSecretName=files-tls --set serviceMonitor.enabled=true > /dev/null
+      - name: Check Helm chart defaults and options
+        run: |
+          helm template minigate charts/minigate --set existingSecret=minigate-config > /tmp/minigate-default.yaml
+          ! grep -Eq '^kind: (Ingress|ServiceMonitor|HorizontalPodAutoscaler|PodDisruptionBudget|ServiceAccount)$' /tmp/minigate-default.yaml
+          helm template minigate charts/minigate --set existingSecret=minigate-config --set autoscaling.enabled=true --set podDisruptionBudget.enabled=true --set serviceAccount.create=true --set ingress.enabled=true --set ingress.host=files.example.com --set ingress.tlsSecretName=files-tls --set serviceMonitor.enabled=true > /dev/null
       - if: github.event_name == 'pull_request'
         run: docker build -t minigate:ci .
 
