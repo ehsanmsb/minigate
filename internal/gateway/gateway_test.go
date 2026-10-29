@@ -36,7 +36,7 @@ func testHandler(f *fakeStorage) *Handler {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
 		Region: "us-east-1", AccessKey: "access", SecretKey: "secret", AllowedPaths: []string{"public"},
-	}}}, 15*time.Second)
+	}}}, 10*time.Minute)
 	r := h.routes["avatars"]
 	r.client = f
 	h.routes["avatars"] = r
@@ -97,7 +97,7 @@ func TestAllowedPathsExposeOnlySelectedDirectories(t *testing.T) {
 			Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
 			Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
 			AllowedPaths: []string{"photos/public", "docs/shared"},
-		}}}, 15*time.Second)
+		}}}, 10*time.Minute)
 		r := h.routes["avatars"]
 		r.client = f
 		h.routes["avatars"] = r
@@ -253,7 +253,7 @@ func TestConfiguredEndpointUsesPathStyle(t *testing.T) {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "public", Bucket: "private-files", Endpoint: upstream.URL,
 		Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
-	}}}, 15*time.Second)
+	}}}, 10*time.Minute)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public/folder/file.txt", nil))
 	if w.Code != http.StatusOK || w.Body.String() != "file" || upstreamPath != "/private-files/folder/file.txt" {
@@ -269,7 +269,7 @@ func TestGenericStorage404ReturnsNotFound(t *testing.T) {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "public", Bucket: "private-files", Endpoint: upstream.URL,
 		Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
-	}}}, 15*time.Second)
+	}}}, 10*time.Minute)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public/missing.txt", nil))
 	if w.Code != http.StatusNotFound {

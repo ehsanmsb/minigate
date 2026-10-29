@@ -17,7 +17,7 @@ The chart requests `100m` CPU and `64Mi` memory and limits each container to `50
 
 The chart defaults to `logLevel: WARN`, so routine requests do not fill the logs. Use `--set logLevel=INFO` to include access denials and invalid ranges, or `--set logLevel=DEBUG` to record every object request. Health probes stay silent.
 
-The application waits at most 5 seconds per attempt for S3 response headers and 15 seconds in total for each object response, including streaming. Set `s3Timeout` in chart values if needed. A timeout before response headers returns 504; a stalled stream after headers is terminated and logged.
+The application waits at most 5 seconds per attempt for S3 response headers and allows up to 10 minutes for the complete object transfer. The 10-minute limit is for transfer, not for waiting before playback starts. Set `s3Timeout` in chart values if needed. A timeout before response headers returns 504; a stalled stream after headers is terminated and logged.
 
 For a public hostname, configure your ingress controller and TLS Secret, then enable the optional Ingress:
 
@@ -66,4 +66,4 @@ helm upgrade --install minigate ./charts/minigate \
 
 The `files-tls` Secret must contain a certificate for `files.example.com`. Leave `httpProxy.tlsSecretName` empty only if HTTP is intentionally served behind another TLS edge. Enable only the exposure template used by your cluster; Ingress, Route, and HTTPProxy are all disabled by default.
 
-When HTTPProxy is enabled, its route uses `timeoutPolicy.response: 20s`, slightly longer than the application's 15-second `s3Timeout`. This gives the app time to return 504 on a storage timeout. If you increase `s3Timeout`, increase the HTTPProxy response timeout as well.
+When HTTPProxy is enabled, its route uses `timeoutPolicy.response: infinity` so a video transfer is not cut off by Contour's 15-second total response default. `timeoutPolicy.idle: 60s` closes a connection that stops transferring data. The application's `s3Timeout` still caps each complete object request.

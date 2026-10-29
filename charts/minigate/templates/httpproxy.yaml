@@ -20,6 +20,7 @@ spec:
         - prefix: /
       timeoutPolicy:
         response: {{ .Values.httpProxy.timeoutPolicy.response | quote }}
+        idle: {{ .Values.httpProxy.timeoutPolicy.idle | quote }}
       services:
         - name: {{ include "minigate.fullname" . }}
           port: {{ .Values.service.port }}

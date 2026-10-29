@@ -24,7 +24,7 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "path to config file")
 	addr := flag.String("addr", ":8080", "http listen address")
 	metricsAddr := flag.String("metrics-addr", "127.0.0.1:9090", "metrics listen address")
-	s3Timeout := flag.Duration("s3-timeout", 15*time.Second, "maximum time for one object response, including download")
+	s3Timeout := flag.Duration("s3-timeout", 10*time.Minute, "maximum time for one object response, including download")
 	flag.Parse()
 	if *s3Timeout <= 0 {
 		log.Fatal("s3-timeout must be positive")
