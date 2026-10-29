@@ -34,6 +34,7 @@ To let Kubernetes adjust replica count, enable `autoscaling.enabled` and set `mi
 | `image.tag` | `""` | Uses the chart's `appVersion` when empty |
 | `imagePullSecrets` | `[]` | Credentials for a private registry |
 | `logLevel` | `WARN` | Application log level |
+| `s3Timeout` | `10m` | Maximum transfer time for one object request |
 | `service.port` | `80` | Internal HTTP Service port |
 | `service.metricsPort` | `9090` | Internal Prometheus Service port |
 | `ingress.enabled` | `false` | Expose file URLs through an Ingress |
@@ -43,6 +44,8 @@ To let Kubernetes adjust replica count, enable `autoscaling.enabled` and set `mi
 | `httpProxy.enabled` | `false` | Create a Contour HTTPProxy |
 | `httpProxy.fqdn` | `""` | Required hostname when HTTPProxy is enabled |
 | `httpProxy.tlsSecretName` | `""` | Optional TLS Secret for HTTPProxy |
+| `httpProxy.timeoutPolicy.response` | `infinity` | Let the app control total transfer time for videos |
+| `httpProxy.timeoutPolicy.idle` | `60s` | Close streams with no traffic for 60 seconds |
 | `serviceMonitor.enabled` | `false` | Create a Prometheus Operator ServiceMonitor |
 | `autoscaling.enabled` | `false` | Create a CPU-based HPA |
 | `podDisruptionBudget.enabled` | `false` | Create a PDB with `maxUnavailable: 1` |
@@ -55,3 +58,5 @@ The chart also supports `nameOverride`, `fullnameOverride`, `podAnnotations`, `p
 Ingress sends traffic only to the file-serving port. Metrics stay on the internal Service. Enable ServiceMonitor only when its CRD is installed. The chart does not create or store S3 credentials.
 
 For OpenShift, see the [deployment guide](../../docs/deployment.md#openshift). HTTPProxy requires Contour and its `projectcontour.io/v1` CRD; it is not an OpenShift built-in. Enable only the exposure template your cluster uses. Route and HTTPProxy also send traffic only to the file-serving Service port.
+
+The app limits each S3 response to `s3Timeout`, including active streaming. This does not delay the first byte; S3 response headers have a separate 5-second timeout per attempt. HTTPProxy allows long responses but closes streams idle for 60 seconds. Video players can use `Range` requests for partial downloads.

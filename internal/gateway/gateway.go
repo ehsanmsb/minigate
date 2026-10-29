@@ -5,12 +5,15 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/smithy-go"
@@ -30,16 +33,21 @@ type route struct {
 }
 
 type Handler struct {
-	routes map[string]route
-	router http.Handler
+	routes  map[string]route
+	router  http.Handler
+	timeout time.Duration
 }
 
-func New(cfg *config.Config) *Handler {
+func New(cfg *config.Config, timeout time.Duration) *Handler {
 	routes := make(map[string]route, len(cfg.Buckets))
+	httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(t *http.Transport) {
+		t.ResponseHeaderTimeout = min(timeout, 5*time.Second)
+	})
 	for _, b := range cfg.Buckets {
 		awsCfg := aws.Config{
 			Region:      b.Region,
 			Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(b.AccessKey, b.SecretKey, "")),
+			HTTPClient:  httpClient,
 		}
 		client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 			o.BaseEndpoint = aws.String(b.Endpoint)
@@ -47,7 +55,7 @@ func New(cfg *config.Config) *Handler {
 		})
 		routes[b.Name] = route{bucket: b.Bucket, allowedPaths: b.AllowedPaths, client: client}
 	}
-	h := &Handler{routes: routes}
+	h := &Handler{routes: routes, timeout: timeout}
 	r := chi.NewRouter()
 	r.Use(middleware.SetHeader("Access-Control-Allow-Origin", "*"))
 	r.Use(middleware.Recoverer)
@@ -104,7 +112,9 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 	if value := r.Header.Get("Range"); strings.HasPrefix(value, "bytes=") && r.Header.Get("If-Range") == "" {
 		input.Range = aws.String(value)
 	}
-	obj, err := selected.client.GetObject(r.Context(), input)
+	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
+	defer cancel()
+	obj, err := selected.client.GetObject(ctx, input)
 	if err != nil {
 		var apiErr smithy.APIError
 		if errors.As(err, &apiErr) {
@@ -123,6 +133,12 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "invalid range", http.StatusRequestedRangeNotSatisfiable)
 				return
 			}
+		}
+		var netErr net.Error
+		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+			slog.Error("request", "status", http.StatusGatewayTimeout, "reason", "storage_timeout", "route", name, "error", err)
+			http.Error(w, "storage timeout", http.StatusGatewayTimeout)
+			return
 		}
 		slog.Error("request", "status", http.StatusBadGateway, "reason", "storage_error", "route", name, "error", err)
 		http.Error(w, "storage unavailable", http.StatusBadGateway)
@@ -157,6 +173,8 @@ func (h *Handler) getObject(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if r.Context().Err() != nil {
 			slog.Debug("request", "status", status, "reason", "client_disconnected", "route", name, "bytes", bytes)
+		} else if ctx.Err() == context.DeadlineExceeded {
+			slog.Error("request", "status", status, "reason", "stream_timeout", "route", name, "bytes", bytes)
 		} else {
 			slog.Error("request", "status", status, "reason", "stream_error", "route", name, "bytes", bytes, "error", err)
 		}

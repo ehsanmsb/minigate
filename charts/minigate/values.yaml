@@ -12,6 +12,7 @@ imagePullSecrets: []
 # Create this Secret separately with a config.yaml key containing S3 credentials.
 existingSecret: ""
 logLevel: WARN
+s3Timeout: 10m # Maximum transfer time per object request; not time to first byte.
 
 serviceAccount:
   create: false
@@ -56,6 +57,9 @@ httpProxy:
   enabled: false
   fqdn: ""
   tlsSecretName: "" # Optional TLS Secret in the release namespace.
+  timeoutPolicy:
+    response: infinity # Let the app control total transfer time for videos.
+    idle: 60s # Close streams that stop transferring data.
 
 resources:
   requests:

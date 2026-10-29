@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -35,7 +36,7 @@ func testHandler(f *fakeStorage) *Handler {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
 		Region: "us-east-1", AccessKey: "access", SecretKey: "secret", AllowedPaths: []string{"public"},
-	}}})
+	}}}, 10*time.Minute)
 	r := h.routes["avatars"]
 	r.client = f
 	h.routes["avatars"] = r
@@ -96,7 +97,7 @@ func TestAllowedPathsExposeOnlySelectedDirectories(t *testing.T) {
 			Name: "avatars", Bucket: "private-images", Endpoint: "https://storage.example.com",
 			Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
 			AllowedPaths: []string{"photos/public", "docs/shared"},
-		}}})
+		}}}, 10*time.Minute)
 		r := h.routes["avatars"]
 		r.client = f
 		h.routes["avatars"] = r
@@ -252,7 +253,7 @@ func TestConfiguredEndpointUsesPathStyle(t *testing.T) {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "public", Bucket: "private-files", Endpoint: upstream.URL,
 		Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
-	}}})
+	}}}, 10*time.Minute)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public/folder/file.txt", nil))
 	if w.Code != http.StatusOK || w.Body.String() != "file" || upstreamPath != "/private-files/folder/file.txt" {
@@ -268,10 +269,54 @@ func TestGenericStorage404ReturnsNotFound(t *testing.T) {
 	h := New(&config.Config{Buckets: []config.Bucket{{
 		Name: "public", Bucket: "private-files", Endpoint: upstream.URL,
 		Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
-	}}})
+	}}}, 10*time.Minute)
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public/missing.txt", nil))
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status=%d want=404", w.Code)
+	}
+}
+
+func TestStorageTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		upstream   http.HandlerFunc
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name: "before headers",
+			upstream: func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(time.Second)
+				_, _ = io.WriteString(w, "late")
+			},
+			wantStatus: http.StatusGatewayTimeout,
+		},
+		{
+			name: "during body",
+			upstream: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Length", "2")
+				_, _ = io.WriteString(w, "a")
+				w.(http.Flusher).Flush()
+				time.Sleep(time.Second)
+				_, _ = io.WriteString(w, "b")
+			},
+			wantStatus: http.StatusOK,
+			wantBody:   "a",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			upstream := httptest.NewServer(tc.upstream)
+			defer upstream.Close()
+			h := New(&config.Config{Buckets: []config.Bucket{{
+				Name: "public", Bucket: "private-files", Endpoint: upstream.URL,
+				Region: "us-east-1", AccessKey: "access", SecretKey: "secret",
+			}}}, 250*time.Millisecond)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/public/file.txt", nil))
+			if w.Code != tc.wantStatus || (tc.wantBody != "" && w.Body.String() != tc.wantBody) {
+				t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
+			}
+		})
 	}
 }
